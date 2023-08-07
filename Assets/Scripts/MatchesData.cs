@@ -1,4 +1,3 @@
-using System.Collections;
 using System.Collections.Generic;
 using SimpleJSON;
 
@@ -23,12 +22,12 @@ public class MatchesData
 [System.Serializable]
 public class Match
 {
-    public string creationDate;
+    public string createdAt;
     public string[] standings;
 
     public Match(string _creationDate, int _standingsCount)
     {
-        this.creationDate = _creationDate;
+        this.createdAt = _creationDate;
         this.standings = new string[_standingsCount];
     }
 }

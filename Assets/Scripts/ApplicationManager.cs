@@ -1,4 +1,3 @@
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using System.Linq;
@@ -18,11 +17,14 @@ public class ApplicationManager : MonoBehaviour
 
     void Awake()
     {
+        Application.targetFrameRate = 60;
         serverManager = GetComponent<ServerManager>();
     }
     void Start()
     {
         ServerManager.OnMatchesFilled += ProcessMatchesData;
+        ServerManager.OnMatchAdded += UpdateMatchesData;
+        ServerManager.OnDataUpdated += UpdateMatchesData;
         serverManager.GetServerData();
     }
 
@@ -49,6 +51,14 @@ public class ApplicationManager : MonoBehaviour
         CalculateEloRatings(_matches);
     }
 
+    void UpdateMatchesData()
+    {
+        totalPlayers.Clear();
+        rankedPlayers.Clear();
+        uiController.ResetPlayerElements();
+        serverManager.GetServerData();
+    }
+
     void CalculateEloRatings(List<Match> _matches)
     {
         foreach(Match match in _matches)
@@ -58,31 +68,45 @@ public class ApplicationManager : MonoBehaviour
             {
                 players[i] = GetPlayerByName(match.standings[i]);
             }
-            UpdateEloRatings(players[0], players[1], players[2], players[3], match.creationDate);
+            UpdateEloRatings(players[0], players[1], players[2], players[3], match.createdAt);
         }
 
         rankedPlayers = rankedPlayers.OrderByDescending(x => x.eloRating).ToList();
+        for(int i = 0; i < rankedPlayers.Count; i++)
+        {
+            rankedPlayers[i].rankingPosition = i + 1;
+        }
         uiController.InitializePlayersList(rankedPlayers);
     }
 
     Player GetPlayerByName(string _name)
     {
-        return rankedPlayers.Find(x => x.name == _name);
+        Player playerByName = rankedPlayers.Find(x => x.name == _name);
+        if(playerByName == null)
+        {
+            foreach(var player in totalPlayers)
+            {
+                playerByName = new Player(player.Key, player.Value);
+            }
+        }
+        return playerByName;
     }
 
     void OnDestroy()
     {
         ServerManager.OnMatchesFilled -= ProcessMatchesData;
+        ServerManager.OnMatchAdded -= UpdateMatchesData;
+        ServerManager.OnDataUpdated -= UpdateMatchesData;
     }
 
     #region Elo Rating System
     private void UpdateEloRatings(Player _player1, Player _player2, Player _player3, Player _player4, string _matchDate)
     {
         // Calculate expected scores for each player
-        float expectedScorePlayer1 = 1 / (1 + Mathf.Pow(10, (_player2.eloRating + _player3.eloRating + _player4.eloRating - _player1.eloRating) / 1200f));
-        float expectedScorePlayer2 = 1 / (1 + Mathf.Pow(10, (_player1.eloRating + _player3.eloRating + _player4.eloRating - _player2.eloRating) / 1200f));
-        float expectedScorePlayer3 = 1 / (1 + Mathf.Pow(10, (_player1.eloRating + _player2.eloRating + _player4.eloRating - _player3.eloRating) / 1200f));
-        float expectedScorePlayer4 = 1 / (1 + Mathf.Pow(10, (_player1.eloRating + _player2.eloRating + _player3.eloRating - _player4.eloRating) / 1200f));
+        float expectedScorePlayer1 = 1 / (1 + Mathf.Pow(10, (_player2.eloRating + _player3.eloRating + _player4.eloRating - _player1.eloRating) / 6400f));
+        float expectedScorePlayer2 = 1 / (1 + Mathf.Pow(10, (_player1.eloRating + _player3.eloRating + _player4.eloRating - _player2.eloRating) / 6400f));
+        float expectedScorePlayer3 = 1 / (1 + Mathf.Pow(10, (_player1.eloRating + _player2.eloRating + _player4.eloRating - _player3.eloRating) / 6400f));
+        float expectedScorePlayer4 = 1 / (1 + Mathf.Pow(10, (_player1.eloRating + _player2.eloRating + _player3.eloRating - _player4.eloRating) / 6400f));
 
         // Calculate rating changes for each player
         _player1.UpdateEloRating(Mathf.RoundToInt(K_FACTOR * (1f - expectedScorePlayer1)), _matchDate);
@@ -112,6 +136,7 @@ public class Player
     public List<int> places;
     public float eloRating;
     public Dictionary<string, float> matchesPlayed;
+    public int rankingPosition;
 
     public Player(string _name, List<int> _places)
     {
@@ -120,6 +145,7 @@ public class Player
         this.nMatches = _places.Count;
         this.eloRating = 1500f;
         this.matchesPlayed = new Dictionary<string, float>();
+        this.rankingPosition = 0;
     }
 
     public void UpdateEloRating(float _ratingAdded, string _matchDate)
